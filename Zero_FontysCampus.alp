@@ -55,7 +55,13 @@ public void f_createInterface(){
 @Override
 public void f_readDatabase(){
 	f_readDatabase_FontysCampus();
-}]]></AdditionalClassCode>
+}
+
+@Override
+public void f_createSurveyCompanies_Excel(){
+	f_createFontysBuildings_and_GC_Excel();
+}
+]]></AdditionalClassCode>
 			<Import><![CDATA[import zerointerfaceloader.OL_ProjectType;]]></Import>
 			<ExtendsReference>
 				<PackageName><![CDATA[zerointerfaceloader]]></PackageName>
@@ -172,6 +178,23 @@ public void f_readDatabase(){
 			</ScaleRuler>
 			<CurrentLevel>1709049506460</CurrentLevel>
 			<ConnectionsId>1709049506454</ConnectionsId>
+			<Variables>
+				<Variable Class="CollectionVariable">
+					<Id>1727443694807</Id>
+					<Name><![CDATA[c_FontysBuildings]]></Name>
+					<X>-380</X><Y>630</Y>
+					<Label><X>10</X><Y>0</Y></Label>
+					<PublicFlag>false</PublicFlag>
+					<PresentationFlag>true</PresentationFlag>
+					<ShowLabel>true</ShowLabel>
+					<Properties SaveInSnapshot="true" AccessType="public" StaticVariable="false">
+						<CollectionClass><![CDATA[ArrayList]]></CollectionClass>
+						<ElementClass><![CDATA[Building_data]]></ElementClass>
+						<ValueElementClass><![CDATA[String]]></ValueElementClass>
+					</Properties>
+
+				</Variable>
+			</Variables>
 			<Functions>
 				<Function AccessType="default" StaticFunction="false">
 					<ReturnModificator>VOID</ReturnModificator>
@@ -246,7 +269,7 @@ epexList(epexList).build();]]></Body>
 					<ReturnType><![CDATA[double]]></ReturnType>
 					<Id>1726156899337</Id>
 					<Name><![CDATA[f_readDatabase_FontysCampus]]></Name>
-					<X>-780</X><Y>170</Y>
+					<X>-740</X><Y>230</Y>
 					<Label><X>10</X><Y>0</Y></Label>
 					<PublicFlag>false</PublicFlag>
 					<PresentationFlag>true</PresentationFlag>
@@ -674,8 +697,220 @@ for(Tuple row : rows){
 List<Tuple> rows = selectFrom(buildings).list();
 
 for(Tuple row : rows){
-	c_GenericCompanyBuilding_data.add(f_buildingRecordBuilder(row));
+	c_FontysBuildings.add(f_buildingRecordBuilder(row));
 }
+
+]]></Body>
+				</Function>
+				<Function AccessType="protected" StaticFunction="false">
+					<ReturnModificator>VOID</ReturnModificator>
+					<ReturnType><![CDATA[double]]></ReturnType>
+					<Id>1727442848159</Id>
+					<Name><![CDATA[f_createFontysBuildings_and_GC_Excel]]></Name>
+					<X>440</X><Y>260</Y>
+					<Label><X>10</X><Y>0</Y></Label>
+					<PublicFlag>false</PublicFlag>
+					<PresentationFlag>true</PresentationFlag>
+					<ShowLabel>true</ShowLabel>
+					<Body><![CDATA[// Loop through the comp_connections
+List<Tuple> connectionRows = selectFrom(comp_connections).list();
+
+for (Tuple connectionRow : connectionRows) {	
+	
+	// Create the GC 
+	GCUtility companyGC = energyModel.add_UtilityConnections();
+	
+	companyGC.p_gridConnectionID = connectionRow.get(comp_connections.gc_id);
+	companyGC.p_ownerID = connectionRow.get( comp_connections.name );
+	companyGC.p_physicalConnectionCapacity_kW = connectionRow.get(comp_connections.connection_capacity_demand);
+	companyGC.p_contractedDeliveryCapacity_kW = connectionRow.get(comp_connections.connection_capacity_demand);
+	companyGC.p_contractedFeedinCapacity_kW = connectionRow.get(comp_connections.connection_capacity_supply);
+	
+	// Create the connection owner
+	ConnectionOwner COC = energyModel.add_pop_connectionOwners();
+	COC.p_actorID = companyGC.p_ownerID;
+	COC.p_actorType = OL_ActorType.CONNECTIONOWNER;
+	COC.p_connectionOwnerType = OL_ConnectionOwnerType.COMPANY;
+	COC.p_detailedCompany = true;
+	
+	//Connect owner with GC
+	companyGC.p_owner = COC;
+	
+	// A GC can have multiple buildings
+	double totalFloorSurfaceAreaGC_m2 = 0;
+	double totalRoofSurfaceAreaGC_m2 = 0;
+	
+	for (Building_data dataBuilding : c_FontysBuildings) {
+		if (dataBuilding.gc_id().equals(companyGC.p_gridConnectionID)) {
+			GIS_Building b = f_createGISBuilding( dataBuilding, companyGC);				
+
+			totalFloorSurfaceAreaGC_m2 += b.p_floorSurfaceArea_m2;
+			totalRoofSurfaceAreaGC_m2 += b.p_roofSurfaceArea_m2;
+			
+			//Style building
+			if (COC.p_detailedCompany) {
+				b.p_defaultFillColor = zero_Interface.v_detailedCompanyBuildingColor;
+				b.p_defaultLineColor = zero_Interface.v_detailedCompanyBuildingLineColor;
+			}
+			else {
+				b.p_defaultFillColor = zero_Interface.v_companyBuildingColor;
+				b.p_defaultLineColor = zero_Interface.v_companyBuildingLineColor;
+			}
+			zero_Interface.f_styleAreas(b);
+			
+			//Adress data (Keeps overwriting this info each time a new building is found, ends with data from last building)
+			companyGC.p_address = new J_Address();
+			companyGC.p_address.setStreetName( dataBuilding.streetname() );
+		 	companyGC.p_address.setHouseNumber( dataBuilding.house_number() );
+		 	companyGC.p_address.setHouseLetter( dataBuilding.house_letter() );
+		 	companyGC.p_address.setHouseAddition( dataBuilding.house_addition() );
+		 	companyGC.p_address.setPostalcode( dataBuilding.postalcode() );
+		 	companyGC.p_address.setCity( dataBuilding.city() );
+		 	
+		 	// Set Trafo ID
+		 	companyGC.p_parentNodeElectricID = dataBuilding.trafo_id();
+		 }
+	}
+		
+	//Add (combined) building data to GC (latitude and longitude + area)
+	companyGC.p_floorSurfaceArea_m2 = totalFloorSurfaceAreaGC_m2;
+	companyGC.p_roofSurfaceArea_m2 = totalRoofSurfaceAreaGC_m2;
+	
+	if (companyGC.c_connectedGISObjects.size() == 0) {
+		throw new IllegalStateException(" GC with owner " + companyGC.p_ownerID + " has no building.");
+	}
+	companyGC.p_longitude = companyGC.c_connectedGISObjects.get(0).p_longitude; // Get longitude of first building (only used to get nearest trafo)
+	companyGC.p_latitude = companyGC.c_connectedGISObjects.get(0).p_latitude; // Get latitude of first building (only used to get nearest trafo)
+	companyGC.setLatLon(companyGC.p_latitude, companyGC.p_longitude);  
+	
+	// Heating type
+	companyGC.p_heatingType = OL_GridConnectionHeatingType.GASBURNER;
+			
+	// Instantiate the energy assets based on the comp_connection excel
+	f_iEAFontysBuildings_and_GC_Excel(connectionRow, companyGC);
+}
+
+]]></Body>
+				</Function>
+				<Function AccessType="protected" StaticFunction="false">
+					<ReturnModificator>VOID</ReturnModificator>
+					<ReturnType><![CDATA[double]]></ReturnType>
+					<Id>1727442848161</Id>
+					<Name><![CDATA[f_iEAFontysBuildings_and_GC_Excel]]></Name>
+					<X>460</X><Y>280</Y>
+					<Label><X>10</X><Y>0</Y></Label>
+					<PublicFlag>false</PublicFlag>
+					<PresentationFlag>true</PresentationFlag>
+					<ShowLabel>true</ShowLabel>
+					<Parameter>
+						<Name><![CDATA[row]]></Name>
+						<Type><![CDATA[Tuple]]></Type>
+					</Parameter>
+					<Parameter>
+						<Name><![CDATA[companyGC]]></Name>
+						<Type><![CDATA[GridConnection]]></Type>
+					</Parameter>
+					<Body><![CDATA[double ratioGasUsedForHeating = 1;
+
+J_scenario_Current current_scenario_list = new J_scenario_Current();
+zero_Interface.c_scenarioMap_Current.put(companyGC, current_scenario_list);
+
+J_scenario_Future future_scenario_list = new J_scenario_Future();
+zero_Interface.c_scenarioMap_Future.put(companyGC, future_scenario_list);
+
+//Add current grid capacity to current scenario list
+current_scenario_list.setCurrentContractDeliveryCapacity_kW(companyGC.p_contractedDeliveryCapacity_kW);
+
+//Add future grid capacity to future scenario list (FOR NOW IT STAYS THE SAME, NO DATA)
+future_scenario_list.setRequestedContractDeliveryCapacity_kW(companyGC.p_contractedDeliveryCapacity_kW);
+
+if (row.get( comp_connections.has_quarterhourly_values )) {	
+	f_addElectricityDemandProfile(companyGC, 0, null, true, companyGC.p_gridConnectionID);
+} else { // If not: Use yearly consumption and generic profiles
+	// Passing null for the amount of PV means no preprocessing is done 
+	f_addElectricityDemandProfile(companyGC, row.get( comp_connections.electricity_consumption_k_wh_year ), null, false, "Office_other_electricity");
+}
+
+//Gas consumption
+double gasConsumption_m3 = row.get( comp_connections.gas_consumption_m3_year );
+
+if (gasConsumption_m3 > 0) {
+	f_addHeatDemandProfile(companyGC, gasConsumption_m3, false, ratioGasUsedForHeating, "Building_heat_demand");
+}
+
+//PV panels
+int installedPV_kW = row.get( comp_connections.pv_installed_kw );
+
+if( installedPV_kW > 0){
+	f_addEnergyProduction(companyGC, OL_EnergyAssetType.PHOTOVOLTAIC, "solar panels", installedPV_kW);
+}
+
+current_scenario_list.setCurrentPV_kW(installedPV_kW);
+future_scenario_list.setPlannedPV_year( row.get( comp_connections.pv_investment_year ) );
+future_scenario_list.setPlannedPV_kW( row.get( comp_connections.pv_investment_kw ) );
+
+
+//Vehicles
+//Trucks
+int nbTrucks = row.get( comp_connections.nb_trucks );
+int nbEVTrucks = row.get( comp_connections.nb_etrucks );
+
+	
+if (nbTrucks > 0) {
+	for (int i = 0; i<nbEVTrucks; i++) {
+		f_addElectricVehicle(companyGC, OL_EnergyAssetType.ELECTRIC_TRUCK, true, 0, 0);
+		v_remainingNumberOfTrucks--;		
+		
+	}
+	for (int i = 0; i<(nbTrucks-nbEVTrucks); i++) {
+		f_addDieselVehicle(companyGC, OL_EnergyAssetType.DIESEL_TRUCK, true, 0);	
+		v_remainingNumberOfTrucks--;	
+	}
+}
+current_scenario_list.setCurrentDieselTrucks(nbTrucks);
+current_scenario_list.setCurrentEVTrucks(nbEVTrucks);
+future_scenario_list.setPlannedEVTrucks( row.get( comp_connections.nb_planned_etrucks ) );
+
+//Vans
+int nbVans =  row.get( comp_connections.nb_vans );
+
+int nbEVans =  row.get( comp_connections.nb_evans );
+
+	
+if (nbVans>0) {
+	for (int i = 0; i<nbEVans; i++) {
+		f_addElectricVehicle(companyGC, OL_EnergyAssetType.ELECTRIC_VAN, true, 0, 0);
+		v_remainingNumberOfVans--;
+		
+	}
+	for (int i = 0; i<(nbVans-nbEVans); i++) {
+		f_addDieselVehicle(companyGC, OL_EnergyAssetType.DIESEL_VAN, true, 0);	
+		v_remainingNumberOfVans--;
+	}
+}
+
+current_scenario_list.setCurrentDieselVans(nbVans);
+current_scenario_list.setCurrentEVVans(nbEVans);
+future_scenario_list.setPlannedEVVans( row.get( comp_connections.nb_planned_evans ) );
+
+
+//Cars	
+int nbCars = row.get( comp_connections.nb_cars );
+int nbEVs = row.get( comp_connections.nb_evs );
+
+
+if (nbCars>0) {
+	for (int i = 0; i<nbEVs; i++) {
+		f_addElectricVehicle(companyGC, OL_EnergyAssetType.ELECTRIC_VEHICLE, true, 0, 0);
+	}
+	for (int i = 0; i<(nbCars-nbEVs); i++) {
+		f_addDieselVehicle(companyGC, OL_EnergyAssetType.DIESEL_VEHICLE, true, 0);	
+	}
+}
+
+current_scenario_list.setCurrentDieselCars(nbCars);
+current_scenario_list.setCurrentEVCars(nbEVs);
+future_scenario_list.setPlannedEVCars( row.get( comp_connections.nb_planned_evs ) );
 
 ]]></Body>
 				</Function>
@@ -870,6 +1105,21 @@ import java.io.PrintStream;]]></Import>
 				</Parameter>
 				<Parameter>
 					<Name><![CDATA[settings]]></Name>
+				</Parameter>
+				<Parameter>
+					<Name><![CDATA[t_scenario_current]]></Name>
+				</Parameter>
+				<Parameter>
+					<Name><![CDATA[t_scenario_2]]></Name>
+				</Parameter>
+				<Parameter>
+					<Name><![CDATA[t_scenario_3]]></Name>
+				</Parameter>
+				<Parameter>
+					<Name><![CDATA[t_scenario_XXX]]></Name>
+				</Parameter>
+				<Parameter>
+					<Name><![CDATA[t_scenario_custom]]></Name>
 				</Parameter>
 			</Parameters>
 			<Generic>false</Generic>
@@ -1207,7 +1457,7 @@ t_scenarioDescription.setText(t_scenario_XXX);]]></Body>
 					<Body><![CDATA[//Project specific styling
 
 //Interface colors
-v_themeColor = new Color(208, 208, 245);
+v_themeColor = new Color(102, 51, 102);
 v_backgroundColor = white;
 
 //Grid node sizes
@@ -1342,10 +1592,55 @@ traceln("Selected scenario: \"" + selected_scenario + "\"");]]></ActionCode>
 						<LinkTo>false</LinkTo>
 					</ExtendedProperties>
 				</Control>
+				<Rectangle>
+					<Id>1727442686158</Id>
+					<Name><![CDATA[rect_fontysLogo]]></Name>
+					<X>0</X><Y>10</Y>
+					<Label><X>10</X><Y>10</Y></Label>
+					<PublicFlag>true</PublicFlag>
+					<PresentationFlag>true</PresentationFlag>
+					<ShowLabel>false</ShowLabel>
+					<DrawMode>SHAPE_DRAW_2D3D</DrawMode>
+					<EmbeddedIcon>false</EmbeddedIcon>
+					<Z>0</Z>
+					<ZHeight>10</ZHeight>
+					<LineWidth>1</LineWidth>
+					<LineColor/>
+					<LineMaterial>null</LineMaterial>
+					<LineStyle>SOLID</LineStyle>
+					<Width>400</Width>
+					<Height>70</Height>
+					<Rotation>0.0</Rotation>
+					<FillColor>-10079386</FillColor>
+					<FillColorCode><![CDATA[v_themeColor]]></FillColorCode>
+					<FillMaterial>null</FillMaterial>
+				</Rectangle>
+				<Rectangle>
+					<Id>1727442599650</Id>
+					<Name><![CDATA[rectangle]]></Name>
+					<X>30</X><Y>-120</Y>
+					<Label><X>10</X><Y>10</Y></Label>
+					<PublicFlag>true</PublicFlag>
+					<PresentationFlag>true</PresentationFlag>
+					<ShowLabel>false</ShowLabel>
+					<DrawMode>SHAPE_DRAW_2D3D</DrawMode>
+					<EmbeddedIcon>false</EmbeddedIcon>
+					<Z>0</Z>
+					<ZHeight>10</ZHeight>
+					<LineWidth>1</LineWidth>
+					<LineColor>-16777216</LineColor>
+					<LineMaterial>null</LineMaterial>
+					<LineStyle>SOLID</LineStyle>
+					<Width>400</Width>
+					<Height>70</Height>
+					<Rotation>0.0</Rotation>
+					<FillColor>-1</FillColor>
+					<FillMaterial>null</FillMaterial>
+				</Rectangle>
 				<Image>
 					<Id>1724682548565</Id>
 					<Name><![CDATA[image_projectLogo]]></Name>
-					<X>50</X><Y>10</Y>
+					<X>120</X><Y>10</Y>
 					<Label><X>0</X><Y>-10</Y></Label>
 					<PublicFlag>true</PublicFlag>
 					<PresentationFlag>true</PresentationFlag>
@@ -1356,13 +1651,13 @@ getExperimentHost().openWebSite("https://holontool.nl/");
 ]]></OnClickCode>
 					<EmbeddedIcon>false</EmbeddedIcon>
 					<Z>0</Z>
-					<Width>300</Width>
-					<Height>80</Height>
+					<Width>140</Width>
+					<Height>60</Height>
 					<Rotation>0.0</Rotation>
 					<ImageFiles>
 						<ImageResourceReference>
 							<PackageName><![CDATA[zerofontyscampus]]></PackageName>
-							<ClassName><![CDATA[logo holon.png]]></ClassName>
+							<ClassName><![CDATA[fontys_logo.png]]></ClassName>
 						</ImageResourceReference>
 					</ImageFiles>
 					<OriginalSize>false</OriginalSize>
@@ -1625,150 +1920,6 @@ getExperimentHost().openWebSite("https://holontool.nl/");
 					</Properties>                 
 				</Variable>
 				<Variable Class="Parameter">
-					<Id>1726226738876</Id>
-					<Name><![CDATA[total_electricity_consumption_companies_kWh_p_yr]]></Name>
-					<X>60</X><Y>430</Y>
-					<Label><X>10</X><Y>0</Y></Label>
-					<PublicFlag>false</PublicFlag>
-					<PresentationFlag>true</PresentationFlag>
-					<ShowLabel>true</ShowLabel>
-					<Properties SaveInSnapshot="true" ModificatorType="STATIC">
-						<Type><![CDATA[Double]]></Type>
-						<UnitType><![CDATA[NONE]]></UnitType>
-						<SdArray>false</SdArray>
-						<DefaultValue Class="CodeValue">
-							<Code><![CDATA[100000.0]]></Code>
-						</DefaultValue>
-						<ParameterEditor>
-							<Id>1726226738874</Id>
-							<EditorContolType>TEXT_BOX</EditorContolType>
-							<MinSliderValue><![CDATA[0]]></MinSliderValue>
-							<MaxSliderValue><![CDATA[100]]></MaxSliderValue>
-							<DelimeterType>NO_DELIMETER</DelimeterType>
-						</ParameterEditor>
-					</Properties>                 
-				</Variable>
-				<Variable Class="Parameter">
-					<Id>1726226738879</Id>
-					<Name><![CDATA[avg_electricity_consumption_house_kWh_p_yr]]></Name>
-					<X>60</X><Y>470</Y>
-					<Label><X>10</X><Y>0</Y></Label>
-					<PublicFlag>false</PublicFlag>
-					<PresentationFlag>true</PresentationFlag>
-					<ShowLabel>true</ShowLabel>
-					<Properties SaveInSnapshot="true" ModificatorType="STATIC">
-						<Type><![CDATA[Double]]></Type>
-						<UnitType><![CDATA[NONE]]></UnitType>
-						<SdArray>false</SdArray>
-						<DefaultValue Class="CodeValue">
-							<Code><![CDATA[0.0]]></Code>
-						</DefaultValue>
-						<ParameterEditor>
-							<Id>1726226738877</Id>
-							<EditorContolType>TEXT_BOX</EditorContolType>
-							<MinSliderValue><![CDATA[0]]></MinSliderValue>
-							<MaxSliderValue><![CDATA[100]]></MaxSliderValue>
-							<DelimeterType>NO_DELIMETER</DelimeterType>
-						</ParameterEditor>
-					</Properties>                 
-				</Variable>
-				<Variable Class="Parameter">
-					<Id>1726226738882</Id>
-					<Name><![CDATA[avg_gas_consumption_house_m3_p_yr]]></Name>
-					<X>60</X><Y>490</Y>
-					<Label><X>10</X><Y>0</Y></Label>
-					<PublicFlag>false</PublicFlag>
-					<PresentationFlag>true</PresentationFlag>
-					<ShowLabel>true</ShowLabel>
-					<Properties SaveInSnapshot="true" ModificatorType="STATIC">
-						<Type><![CDATA[Double]]></Type>
-						<UnitType><![CDATA[NONE]]></UnitType>
-						<SdArray>false</SdArray>
-						<DefaultValue Class="CodeValue">
-							<Code><![CDATA[0.0]]></Code>
-						</DefaultValue>
-						<ParameterEditor>
-							<Id>1726226738880</Id>
-							<EditorContolType>TEXT_BOX</EditorContolType>
-							<MinSliderValue><![CDATA[0]]></MinSliderValue>
-							<MaxSliderValue><![CDATA[100]]></MaxSliderValue>
-							<DelimeterType>NO_DELIMETER</DelimeterType>
-						</ParameterEditor>
-					</Properties>                 
-				</Variable>
-				<Variable Class="Parameter">
-					<Id>1726226738885</Id>
-					<Name><![CDATA[total_gas_consumption_companies_m3_p_yr]]></Name>
-					<X>60</X><Y>450</Y>
-					<Label><X>10</X><Y>0</Y></Label>
-					<PublicFlag>false</PublicFlag>
-					<PresentationFlag>true</PresentationFlag>
-					<ShowLabel>true</ShowLabel>
-					<Properties SaveInSnapshot="true" ModificatorType="STATIC">
-						<Type><![CDATA[Double]]></Type>
-						<UnitType><![CDATA[NONE]]></UnitType>
-						<SdArray>false</SdArray>
-						<DefaultValue Class="CodeValue">
-							<Code><![CDATA[100000.0]]></Code>
-						</DefaultValue>
-						<ParameterEditor>
-							<Id>1726226738883</Id>
-							<EditorContolType>TEXT_BOX</EditorContolType>
-							<MinSliderValue><![CDATA[0]]></MinSliderValue>
-							<MaxSliderValue><![CDATA[100]]></MaxSliderValue>
-							<DelimeterType>NO_DELIMETER</DelimeterType>
-						</ParameterEditor>
-					</Properties>                 
-				</Variable>
-				<Variable Class="Parameter">
-					<Id>1726226738891</Id>
-					<Name><![CDATA[total_trucks_companies]]></Name>
-					<X>60</X><Y>530</Y>
-					<Label><X>10</X><Y>0</Y></Label>
-					<PublicFlag>false</PublicFlag>
-					<PresentationFlag>true</PresentationFlag>
-					<ShowLabel>true</ShowLabel>
-					<Properties SaveInSnapshot="true" ModificatorType="STATIC">
-						<Type><![CDATA[Integer]]></Type>
-						<UnitType><![CDATA[NONE]]></UnitType>
-						<SdArray>false</SdArray>
-						<DefaultValue Class="CodeValue">
-							<Code><![CDATA[0]]></Code>
-						</DefaultValue>
-						<ParameterEditor>
-							<Id>1726226738889</Id>
-							<EditorContolType>TEXT_BOX</EditorContolType>
-							<MinSliderValue><![CDATA[0]]></MinSliderValue>
-							<MaxSliderValue><![CDATA[100]]></MaxSliderValue>
-							<DelimeterType>NO_DELIMETER</DelimeterType>
-						</ParameterEditor>
-					</Properties>                 
-				</Variable>
-				<Variable Class="Parameter">
-					<Id>1726226738897</Id>
-					<Name><![CDATA[total_vans_companies]]></Name>
-					<X>60</X><Y>510</Y>
-					<Label><X>10</X><Y>0</Y></Label>
-					<PublicFlag>false</PublicFlag>
-					<PresentationFlag>true</PresentationFlag>
-					<ShowLabel>true</ShowLabel>
-					<Properties SaveInSnapshot="true" ModificatorType="STATIC">
-						<Type><![CDATA[Integer]]></Type>
-						<UnitType><![CDATA[NONE]]></UnitType>
-						<SdArray>false</SdArray>
-						<DefaultValue Class="CodeValue">
-							<Code><![CDATA[0]]></Code>
-						</DefaultValue>
-						<ParameterEditor>
-							<Id>1726226738895</Id>
-							<EditorContolType>TEXT_BOX</EditorContolType>
-							<MinSliderValue><![CDATA[0]]></MinSliderValue>
-							<MaxSliderValue><![CDATA[100]]></MaxSliderValue>
-							<DelimeterType>NO_DELIMETER</DelimeterType>
-						</ParameterEditor>
-					</Properties>                 
-				</Variable>
-				<Variable Class="Parameter">
 					<Id>1726226738900</Id>
 					<Name><![CDATA[project_type]]></Name>
 					<Description><![CDATA[BUSINESSPARK or RESIDENTIAL]]></Description>
@@ -1991,6 +2142,9 @@ Important note: The excel sheet name should always be the same as the anylogic d
 {"Buildings", "buildings"},
 {"GridNodes", "gridnodes"},
 {"Neighbourhoods", "neighbourhoods"},
+{"Energiedata", "comp_connections"},
+{"Energiedata", "comp_elec_consumption"},
+{"Energiedata", "comp_gas_consumption"}
 }
 ]]></Code>
 						</CollectionInitializer>
@@ -2010,28 +2164,6 @@ Important note: The excel sheet name should always be the same as the anylogic d
 					<PublicFlag>false</PublicFlag>
 					<PresentationFlag>true</PresentationFlag>
 					<ShowLabel>true</ShowLabel>
-					<Body><![CDATA[if (avg_electricity_consumption_house_kWh_p_yr != null && avg_electricity_consumption_house_kWh_p_yr > 0){
-	loader_FontysCampus.avgc_data.p_avgHouseElectricityConsumption_kWh_yr = avg_electricity_consumption_house_kWh_p_yr;
-}
-if (avg_gas_consumption_house_m3_p_yr != null && avg_gas_consumption_house_m3_p_yr > 0){
-	loader_FontysCampus.avgc_data.p_avgHouseGasConsumption_m3_yr = avg_gas_consumption_house_m3_p_yr;
-}]]></Body>
-				</Function>
-				<Function AccessType="default" StaticFunction="false">
-					<ReturnModificator>VOID</ReturnModificator>
-					<ReturnType><![CDATA[double]]></ReturnType>
-					<Id>1726226738852</Id>
-					<Name><![CDATA[f_initializeRemainingTotals]]></Name>
-					<X>580</X><Y>390</Y>
-					<Label><X>10</X><Y>0</Y></Label>
-					<PublicFlag>false</PublicFlag>
-					<PresentationFlag>true</PresentationFlag>
-					<ShowLabel>true</ShowLabel>
-					<Body><![CDATA[//Initialize remaining totals of the area
-loader_FontysCampus.v_remainingNumberOfVans = total_vans_companies;
-loader_FontysCampus.v_remainingNumberOfTrucks = total_trucks_companies;
-loader_FontysCampus.v_remainingElectricityDelivery_kWh = total_electricity_consumption_companies_kWh_p_yr;
-loader_FontysCampus.v_remainingGasConsumption_m3 = total_gas_consumption_companies_m3_p_yr;]]></Body>
 				</Function>
 				<Function AccessType="default" StaticFunction="false">
 					<ReturnModificator>VOID</ReturnModificator>
@@ -2065,13 +2197,6 @@ hasCongestionPricing(hasCongestionPricing).
 energy_coop(energy_coop).
 energy_supplier(energy_supplier).
 
-//Project totals
-total_electricity_consumption_companies_kWh_p_yr(total_electricity_consumption_companies_kWh_p_yr).
-total_gas_consumption_companies_m3_p_yr(total_gas_consumption_companies_m3_p_yr).
-avg_electricity_consumption_house_kWh_p_yr(avg_electricity_consumption_house_kWh_p_yr).
-avg_gas_consumption_house_m3_p_yr(avg_gas_consumption_house_m3_p_yr).
-total_vans_companies(total_vans_companies).
-total_trucks_companies(total_trucks_companies).
 build();
 ]]></Body>
 				</Function>
@@ -2110,11 +2235,8 @@ loader_FontysCampus.f_startUpLoader_default();]]></Body>
 					<PublicFlag>false</PublicFlag>
 					<PresentationFlag>true</PresentationFlag>
 					<ShowLabel>true</ShowLabel>
-					<Body><![CDATA[//Manually overwrite the avgc values
-f_overwriteAvgValuesAVGCDatabase();
-
-//Initialize remaining totals in the loader
-f_initializeRemainingTotals();]]></Body>
+					<Body><![CDATA[f_overwriteAvgValuesAVGCDatabase();
+]]></Body>
 				</Function>
 				<Function AccessType="default" StaticFunction="false">
 					<ReturnModificator>VOID</ReturnModificator>
@@ -2272,27 +2394,6 @@ build();]]></Body>
 					<LevelVisibility>DIM_NON_CURRENT</LevelVisibility>
 
 			<Presentation>
-				<Text>
-					<Id>1726226738840</Id>
-					<Name><![CDATA[text1]]></Name>
-					<X>50</X><Y>400</Y>
-					<Label><X>0</X><Y>-10</Y></Label>
-					<PublicFlag>true</PublicFlag>
-					<PresentationFlag>true</PresentationFlag>
-					<ShowLabel>false</ShowLabel>
-					<DrawMode>SHAPE_DRAW_2D</DrawMode>
-					<EmbeddedIcon>false</EmbeddedIcon>
-					<Z>0</Z>
-					<Rotation>0.0</Rotation>
-					<Color>-16777216</Color>
-					<Text><![CDATA[Project specific energy consumption totals and averages]]></Text>
-					<Font>
-						<Name>SansSerif</Name>
-						<Size>14</Size>
-						<Style>1</Style>
-					</Font>
-					<Alignment>LEFT</Alignment>
-				</Text>
 				<Text>
 					<Id>1726226738842</Id>
 					<Name><![CDATA[text4]]></Name>
@@ -2485,6 +2586,27 @@ build();]]></Body>
 		<ShutdownCompact>false</ShutdownCompact>
 		<ImportSettings>
 			<ExternalConnection>
+				<Id>1727444824961</Id>
+				<Name><![CDATA[database]]></Name>
+				<X>0</X><Y>0</Y>
+				<Label><X>10</X><Y>0</Y></Label>
+				<PublicFlag>false</PublicFlag>
+				<PresentationFlag>true</PresentationFlag>
+				<ShowLabel>true</ShowLabel>
+				<DatabaseType>EXCEL_ACCESS</DatabaseType>
+				<ConnectionURL><![CDATA[]]></ConnectionURL>
+				<ConnectOnStartup>true</ConnectOnStartup>
+				<DatabaseName><![CDATA[]]></DatabaseName>
+				<ResourceReference>
+					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
+					<ClassName><![CDATA[data_FontysCampus/Energiedata_FontysCampus.xlsx]]></ClassName>
+				</ResourceReference>
+				<Host><![CDATA[localhost]]></Host>
+				<JdbcDriverClassName><![CDATA[net.sourceforge.jtds.jdbc.Driver]]></JdbcDriverClassName>
+				<Login><![CDATA[]]></Login>
+				<Password><![CDATA[]]></Password>
+			</ExternalConnection>
+			<ExternalConnection>
 				<Id>1727366046757</Id>
 				<Name><![CDATA[database]]></Name>
 				<X>0</X><Y>0</Y>
@@ -2527,27 +2649,6 @@ build();]]></Body>
 				<Password><![CDATA[]]></Password>
 			</ExternalConnection>
 			<ExternalConnection>
-				<Id>1727365835570</Id>
-				<Name><![CDATA[database]]></Name>
-				<X>0</X><Y>0</Y>
-				<Label><X>10</X><Y>0</Y></Label>
-				<PublicFlag>false</PublicFlag>
-				<PresentationFlag>true</PresentationFlag>
-				<ShowLabel>true</ShowLabel>
-				<DatabaseType>EXCEL_ACCESS</DatabaseType>
-				<ConnectionURL><![CDATA[]]></ConnectionURL>
-				<ConnectOnStartup>true</ConnectOnStartup>
-				<DatabaseName><![CDATA[]]></DatabaseName>
-				<ResourceReference>
-					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
-					<ClassName><![CDATA[data_FontysCampus/Neighbourhoods_FontysCampus.xlsx]]></ClassName>
-				</ResourceReference>
-				<Host><![CDATA[localhost]]></Host>
-				<JdbcDriverClassName><![CDATA[net.sourceforge.jtds.jdbc.Driver]]></JdbcDriverClassName>
-				<Login><![CDATA[]]></Login>
-				<Password><![CDATA[]]></Password>
-			</ExternalConnection>
-			<ExternalConnection>
 				<Id>1727440027081</Id>
 				<Name><![CDATA[database]]></Name>
 				<X>0</X><Y>0</Y>
@@ -2568,12 +2669,51 @@ build();]]></Body>
 				<Login><![CDATA[]]></Login>
 				<Password><![CDATA[]]></Password>
 			</ExternalConnection>
+			<ExternalConnection>
+				<Id>1727365835570</Id>
+				<Name><![CDATA[database]]></Name>
+				<X>0</X><Y>0</Y>
+				<Label><X>10</X><Y>0</Y></Label>
+				<PublicFlag>false</PublicFlag>
+				<PresentationFlag>true</PresentationFlag>
+				<ShowLabel>true</ShowLabel>
+				<DatabaseType>EXCEL_ACCESS</DatabaseType>
+				<ConnectionURL><![CDATA[]]></ConnectionURL>
+				<ConnectOnStartup>true</ConnectOnStartup>
+				<DatabaseName><![CDATA[]]></DatabaseName>
+				<ResourceReference>
+					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
+					<ClassName><![CDATA[data_FontysCampus/Neighbourhoods_FontysCampus.xlsx]]></ClassName>
+				</ResourceReference>
+				<Host><![CDATA[localhost]]></Host>
+				<JdbcDriverClassName><![CDATA[net.sourceforge.jtds.jdbc.Driver]]></JdbcDriverClassName>
+				<Login><![CDATA[]]></Login>
+				<Password><![CDATA[]]></Password>
+			</ExternalConnection>
+			<TableImportSettings>
+				<TableReference>
+					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
+					<ClassName><![CDATA[comp_gas_consumption]]></ClassName>
+				</TableReference>
+				<ConnectionIndex>0</ConnectionIndex>
+				<ExternalTableName><![CDATA["comp_gas_consumption"]]></ExternalTableName>
+				<AutoImport>false</AutoImport>
+			</TableImportSettings>
+			<TableImportSettings>
+				<TableReference>
+					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
+					<ClassName><![CDATA[comp_elec_consumption]]></ClassName>
+				</TableReference>
+				<ConnectionIndex>0</ConnectionIndex>
+				<ExternalTableName><![CDATA["comp_elec_consumption"]]></ExternalTableName>
+				<AutoImport>false</AutoImport>
+			</TableImportSettings>
 			<TableImportSettings>
 				<TableReference>
 					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
 					<ClassName><![CDATA[profiles]]></ClassName>
 				</TableReference>
-				<ConnectionIndex>0</ConnectionIndex>
+				<ConnectionIndex>1</ConnectionIndex>
 				<ExternalTableName><![CDATA["profiles_2023"]]></ExternalTableName>
 				<AutoImport>false</AutoImport>
 			</TableImportSettings>
@@ -2582,17 +2722,17 @@ build();]]></Body>
 					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
 					<ClassName><![CDATA[gridnodes]]></ClassName>
 				</TableReference>
-				<ConnectionIndex>1</ConnectionIndex>
+				<ConnectionIndex>2</ConnectionIndex>
 				<ExternalTableName><![CDATA["gridnodes"]]></ExternalTableName>
 				<AutoImport>false</AutoImport>
 			</TableImportSettings>
 			<TableImportSettings>
 				<TableReference>
 					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
-					<ClassName><![CDATA[neighbourhoods]]></ClassName>
+					<ClassName><![CDATA[comp_connections]]></ClassName>
 				</TableReference>
-				<ConnectionIndex>2</ConnectionIndex>
-				<ExternalTableName><![CDATA["neighbourhoods"]]></ExternalTableName>
+				<ConnectionIndex>0</ConnectionIndex>
+				<ExternalTableName><![CDATA["comp_connections"]]></ExternalTableName>
 				<AutoImport>false</AutoImport>
 			</TableImportSettings>
 			<TableImportSettings>
@@ -2602,6 +2742,15 @@ build();]]></Body>
 				</TableReference>
 				<ConnectionIndex>3</ConnectionIndex>
 				<ExternalTableName><![CDATA["buildings"]]></ExternalTableName>
+				<AutoImport>false</AutoImport>
+			</TableImportSettings>
+			<TableImportSettings>
+				<TableReference>
+					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
+					<ClassName><![CDATA[neighbourhoods]]></ClassName>
+				</TableReference>
+				<ConnectionIndex>4</ConnectionIndex>
+				<ExternalTableName><![CDATA["neighbourhoods"]]></ExternalTableName>
 				<AutoImport>false</AutoImport>
 			</TableImportSettings>
 		</ImportSettings>
@@ -2692,24 +2841,6 @@ build();]]></Body>
 					<ParameterName><![CDATA[energy_supplier]]></ParameterName>
 				</Parameter>
 				<Parameter>
-					<ParameterName><![CDATA[total_electricity_consumption_companies_kWh_p_yr]]></ParameterName>
-				</Parameter>
-				<Parameter>
-					<ParameterName><![CDATA[avg_electricity_consumption_house_kWh_p_yr]]></ParameterName>
-				</Parameter>
-				<Parameter>
-					<ParameterName><![CDATA[avg_gas_consumption_house_m3_p_yr]]></ParameterName>
-				</Parameter>
-				<Parameter>
-					<ParameterName><![CDATA[total_gas_consumption_companies_m3_p_yr]]></ParameterName>
-				</Parameter>
-				<Parameter>
-					<ParameterName><![CDATA[total_trucks_companies]]></ParameterName>
-				</Parameter>
-				<Parameter>
-					<ParameterName><![CDATA[total_vans_companies]]></ParameterName>
-				</Parameter>
-				<Parameter>
 					<ParameterName><![CDATA[project_type]]></ParameterName>
 				</Parameter>
 				<Parameter>
@@ -2769,11 +2900,6 @@ build();]]></Body>
 			<Location>FILE_SYSTEM</Location>
 		</Resource>
 		<Resource>
-			<Path><![CDATA[logo holon.png]]></Path>
-			<ReferencedFromUserCode>false</ReferencedFromUserCode>
-			<Location>FILE_SYSTEM</Location>
-		</Resource>
-		<Resource>
 			<Path><![CDATA[data_FontysCampus/Buildings_FontysCampus.xlsx]]></Path>
 			<ReferencedFromUserCode>false</ReferencedFromUserCode>
 			<Location>FILE_SYSTEM</Location>
@@ -2784,7 +2910,12 @@ build();]]></Body>
 			<Location>FILE_SYSTEM</Location>
 		</Resource>
 		<Resource>
-			<Path><![CDATA[data_FontysCampus/Cables_FontysCampus.xlsx]]></Path>
+			<Path><![CDATA[fontys_logo.png]]></Path>
+			<ReferencedFromUserCode>false</ReferencedFromUserCode>
+			<Location>FILE_SYSTEM</Location>
+		</Resource>
+		<Resource>
+			<Path><![CDATA[data_FontysCampus/Energiedata_FontysCampus.xlsx]]></Path>
 			<ReferencedFromUserCode>false</ReferencedFromUserCode>
 			<Location>FILE_SYSTEM</Location>
 		</Resource>
