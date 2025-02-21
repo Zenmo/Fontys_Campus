@@ -4,7 +4,7 @@
 	         AnyLogic Project File
 *************************************************
 -->
-<AnyLogicWorkspace WorkspaceVersion="1.9" AnyLogicVersion="8.9.1.202408021042" AlpVersion="8.9.1">
+<AnyLogicWorkspace WorkspaceVersion="1.9" AnyLogicVersion="8.9.2.202410172112" AlpVersion="8.9.2">
 <Model>
 	<Id>1658477103134</Id>
 	<Name><![CDATA[Zero_FontysCampus]]></Name>
@@ -72,9 +72,6 @@ public void f_createSurveyCompanies_Excel(){
 					<Name><![CDATA[zero_Interface]]></Name>
 				</Parameter>
 				<Parameter>
-					<Name><![CDATA[p_createGridnodeTimeSeries]]></Name>
-				</Parameter>
-				<Parameter>
 					<Name><![CDATA[genericProfiles_data]]></Name>
 				</Parameter>
 				<Parameter>
@@ -85,6 +82,9 @@ public void f_createSurveyCompanies_Excel(){
 				</Parameter>
 				<Parameter>
 					<Name><![CDATA[user]]></Name>
+				</Parameter>
+				<Parameter>
+					<Name><![CDATA[customProfiles_data]]></Name>
 				</Parameter>
 			</Parameters>
 			<Generic>false</Generic>
@@ -139,9 +139,7 @@ public void f_createSurveyCompanies_Excel(){
 					<RowsCountCode><![CDATA[100]]></RowsCountCode>
 					<NeigborhoodType>MOORE</NeigborhoodType>
 					<LayoutType>USER_DEF</LayoutType>
-					<LayoutTypeApplyOnStartup>true</LayoutTypeApplyOnStartup>
 					<NetworkType>USER_DEF</NetworkType>
-					<NetworkTypeApplyOnStartup>true</NetworkTypeApplyOnStartup>
 					<ConnectionsPerAgentCode><![CDATA[2]]></ConnectionsPerAgentCode>
 					<ConnectionsRangeCode><![CDATA[50]]></ConnectionsRangeCode>
 					<NeighborLinkFractionCode><![CDATA[0.95]]></NeighborLinkFractionCode>
@@ -707,7 +705,7 @@ for(Tuple row : rows){
 					<ReturnType><![CDATA[double]]></ReturnType>
 					<Id>1727442848159</Id>
 					<Name><![CDATA[f_createFontysBuildings_and_GC_Excel]]></Name>
-					<X>440</X><Y>260</Y>
+					<X>440</X><Y>290</Y>
 					<Label><X>10</X><Y>0</Y></Label>
 					<PublicFlag>false</PublicFlag>
 					<PresentationFlag>true</PresentationFlag>
@@ -797,7 +795,7 @@ for (Tuple connectionRow : connectionRows) {
 					<ReturnType><![CDATA[double]]></ReturnType>
 					<Id>1727442848161</Id>
 					<Name><![CDATA[f_iEAFontysBuildings_and_GC_Excel]]></Name>
-					<X>460</X><Y>280</Y>
+					<X>460</X><Y>310</Y>
 					<Label><X>10</X><Y>0</Y></Label>
 					<PublicFlag>false</PublicFlag>
 					<PresentationFlag>true</PresentationFlag>
@@ -833,9 +831,19 @@ if (row.get( comp_connections.has_quarterhourly_values )) {
 
 //Gas consumption
 double gasConsumption_m3 = row.get( comp_connections.gas_consumption_m3_year );
+boolean hasGasValues = false;
+String ProfileName = "Building_heat_demand";
+
+try{ 
+	if (selectFirstValue(Double.class, "SELECT " + companyGC.p_gridConnectionID + "_demand FROM comp_gas_consumption LIMIT 1;") != null){
+		hasGasValues = true;
+		ProfileName = companyGC.p_gridConnectionID;
+	}
+}
+catch(Exception e){}
 
 if (gasConsumption_m3 > 0) {
-	f_addHeatDemandProfile(companyGC, gasConsumption_m3, false, ratioGasUsedForHeating, "Building_heat_demand");
+	f_addHeatDemandProfile(companyGC, gasConsumption_m3, hasGasValues, ratioGasUsedForHeating, ProfileName);
 }
 
 //PV panels
@@ -1003,6 +1011,9 @@ future_scenario_list.setPlannedEVCars( row.get( comp_connections.nb_planned_evs 
 						<Parameter>
 							<Name><![CDATA[settings]]></Name>
 						</Parameter>
+						<Parameter>
+							<Name><![CDATA[map_scale]]></Name>
+						</Parameter>
 					</Parameters>
 					<ReplicationFlag>false</ReplicationFlag>
 					<Replication Class="CodeValue">
@@ -1010,7 +1021,7 @@ future_scenario_list.setPlannedEVCars( row.get( comp_connections.nb_planned_evs 
 					</Replication>
 					<CollectionType>ARRAY_LIST_BASED</CollectionType>
 					<InEnvironment>true</InEnvironment>	
-					<InitialLocationType>AT_ANIMATION_POSITION</InitialLocationType>
+					<InitialLocationType>XYZ</InitialLocationType>
 					<XCode Class="CodeValue">
 						<Code><![CDATA[0]]></Code>
 					</XCode>
@@ -1026,12 +1037,6 @@ future_scenario_list.setPlannedEVCars( row.get( comp_connections.nb_planned_evs 
 					<RowCode Class="CodeValue">
 						<Code><![CDATA[0]]></Code>
 					</RowCode>
-					<LatitudeCode Class="CodeValue">
-						<Code><![CDATA[0]]></Code>
-					</LatitudeCode>
-					<LongitudeCode Class="CodeValue">
-						<Code><![CDATA[0]]></Code>
-					</LongitudeCode>
 					<LocationNameCode Class="CodeValue">
 						<Code><![CDATA[""]]></Code>
 					</LocationNameCode>
@@ -1107,19 +1112,7 @@ import java.io.PrintStream;]]></Import>
 					<Name><![CDATA[settings]]></Name>
 				</Parameter>
 				<Parameter>
-					<Name><![CDATA[t_scenario_current]]></Name>
-				</Parameter>
-				<Parameter>
-					<Name><![CDATA[t_scenario_2]]></Name>
-				</Parameter>
-				<Parameter>
-					<Name><![CDATA[t_scenario_3]]></Name>
-				</Parameter>
-				<Parameter>
-					<Name><![CDATA[t_scenario_XXX]]></Name>
-				</Parameter>
-				<Parameter>
-					<Name><![CDATA[t_scenario_custom]]></Name>
+					<Name><![CDATA[map_scale]]></Name>
 				</Parameter>
 			</Parameters>
 			<Generic>false</Generic>
@@ -1174,9 +1167,7 @@ import java.io.PrintStream;]]></Import>
 					<RowsCountCode><![CDATA[100]]></RowsCountCode>
 					<NeigborhoodType>MOORE</NeigborhoodType>
 					<LayoutType>USER_DEF</LayoutType>
-					<LayoutTypeApplyOnStartup>true</LayoutTypeApplyOnStartup>
 					<NetworkType>USER_DEF</NetworkType>
-					<NetworkTypeApplyOnStartup>true</NetworkTypeApplyOnStartup>
 					<ConnectionsPerAgentCode><![CDATA[2]]></ConnectionsPerAgentCode>
 					<ConnectionsRangeCode><![CDATA[50]]></ConnectionsRangeCode>
 					<NeighborLinkFractionCode><![CDATA[0.95]]></NeighborLinkFractionCode>
@@ -1739,9 +1730,7 @@ getExperimentHost().openWebSite("https://holontool.nl/");
 					<RowsCountCode><![CDATA[100]]></RowsCountCode>
 					<NeigborhoodType>MOORE</NeigborhoodType>
 					<LayoutType>USER_DEF</LayoutType>
-					<LayoutTypeApplyOnStartup>true</LayoutTypeApplyOnStartup>
 					<NetworkType>USER_DEF</NetworkType>
-					<NetworkTypeApplyOnStartup>true</NetworkTypeApplyOnStartup>
 					<ConnectionsPerAgentCode><![CDATA[2]]></ConnectionsPerAgentCode>
 					<ConnectionsRangeCode><![CDATA[50]]></ConnectionsRangeCode>
 					<NeighborLinkFractionCode><![CDATA[0.95]]></NeighborLinkFractionCode>
@@ -2071,7 +2060,7 @@ If you don't: False (faster startup with false)]]></Description>
 				</Variable>
 				<Variable Class="Parameter">
 					<Id>1726495028597</Id>
-					<Name><![CDATA[map_zoomlevel]]></Name>
+					<Name><![CDATA[map_scale]]></Name>
 					<X>60</X><Y>250</Y>
 					<Label><X>10</X><Y>0</Y></Label>
 					<PublicFlag>false</PublicFlag>
@@ -2081,6 +2070,9 @@ If you don't: False (faster startup with false)]]></Description>
 						<Type><![CDATA[double]]></Type>
 						<UnitType><![CDATA[NONE]]></UnitType>
 						<SdArray>false</SdArray>
+						<DefaultValue Class="CodeValue">
+							<Code><![CDATA[1/10000.0]]></Code>
+						</DefaultValue>
 						<ParameterEditor>
 							<Id>1726495028595</Id>
 							<EditorContolType>TEXT_BOX</EditorContolType>
@@ -2189,7 +2181,7 @@ databaseNames(databaseNames).
 //Map centre coordinates
 map_centre_latitude(map_centre_latitude).
 map_centre_longitude(map_centre_longitude).
-map_zoomlevel(map_zoomlevel).
+map_scale(map_scale).
 
 //Project specific actors
 grid_operator(grid_operator).
@@ -2323,9 +2315,6 @@ build();]]></Body>
 							<Name><![CDATA[zero_Interface]]></Name>
 						</Parameter>
 						<Parameter>
-							<Name><![CDATA[p_createGridnodeTimeSeries]]></Name>
-						</Parameter>
-						<Parameter>
 							<Name><![CDATA[genericProfiles_data]]></Name>
 						</Parameter>
 						<Parameter>
@@ -2337,6 +2326,9 @@ build();]]></Body>
 						<Parameter>
 							<Name><![CDATA[user]]></Name>
 						</Parameter>
+						<Parameter>
+							<Name><![CDATA[customProfiles_data]]></Name>
+						</Parameter>
 					</Parameters>
 					<ReplicationFlag>false</ReplicationFlag>
 					<Replication Class="CodeValue">
@@ -2344,7 +2336,7 @@ build();]]></Body>
 					</Replication>
 					<CollectionType>ARRAY_LIST_BASED</CollectionType>
 					<InEnvironment>true</InEnvironment>	
-					<InitialLocationType>AT_ANIMATION_POSITION</InitialLocationType>
+					<InitialLocationType>XYZ</InitialLocationType>
 					<XCode Class="CodeValue">
 						<Code><![CDATA[0]]></Code>
 					</XCode>
@@ -2360,12 +2352,6 @@ build();]]></Body>
 					<RowCode Class="CodeValue">
 						<Code><![CDATA[0]]></Code>
 					</RowCode>
-					<LatitudeCode Class="CodeValue">
-						<Code><![CDATA[0]]></Code>
-					</LatitudeCode>
-					<LongitudeCode Class="CodeValue">
-						<Code><![CDATA[0]]></Code>
-					</LongitudeCode>
 					<LocationNameCode Class="CodeValue">
 						<Code><![CDATA[""]]></Code>
 					</LocationNameCode>
@@ -2583,7 +2569,7 @@ build();]]></Body>
 	<Database>
 		<Logging>false</Logging>
 		<AutoExport>false</AutoExport>
-		<ShutdownCompact>false</ShutdownCompact>
+		<ShutdownCompact>true</ShutdownCompact>
 		<ImportSettings>
 			<ExternalConnection>
 				<Id>1727444824961</Id>
@@ -2649,27 +2635,6 @@ build();]]></Body>
 				<Password><![CDATA[]]></Password>
 			</ExternalConnection>
 			<ExternalConnection>
-				<Id>1727440027081</Id>
-				<Name><![CDATA[database]]></Name>
-				<X>0</X><Y>0</Y>
-				<Label><X>10</X><Y>0</Y></Label>
-				<PublicFlag>false</PublicFlag>
-				<PresentationFlag>true</PresentationFlag>
-				<ShowLabel>true</ShowLabel>
-				<DatabaseType>EXCEL_ACCESS</DatabaseType>
-				<ConnectionURL><![CDATA[]]></ConnectionURL>
-				<ConnectOnStartup>true</ConnectOnStartup>
-				<DatabaseName><![CDATA[]]></DatabaseName>
-				<ResourceReference>
-					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
-					<ClassName><![CDATA[data_FontysCampus/Buildings_FontysCampus.xlsx]]></ClassName>
-				</ResourceReference>
-				<Host><![CDATA[localhost]]></Host>
-				<JdbcDriverClassName><![CDATA[net.sourceforge.jtds.jdbc.Driver]]></JdbcDriverClassName>
-				<Login><![CDATA[]]></Login>
-				<Password><![CDATA[]]></Password>
-			</ExternalConnection>
-			<ExternalConnection>
 				<Id>1727365835570</Id>
 				<Name><![CDATA[database]]></Name>
 				<X>0</X><Y>0</Y>
@@ -2684,6 +2649,27 @@ build();]]></Body>
 				<ResourceReference>
 					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
 					<ClassName><![CDATA[data_FontysCampus/Neighbourhoods_FontysCampus.xlsx]]></ClassName>
+				</ResourceReference>
+				<Host><![CDATA[localhost]]></Host>
+				<JdbcDriverClassName><![CDATA[net.sourceforge.jtds.jdbc.Driver]]></JdbcDriverClassName>
+				<Login><![CDATA[]]></Login>
+				<Password><![CDATA[]]></Password>
+			</ExternalConnection>
+			<ExternalConnection>
+				<Id>1727440027081</Id>
+				<Name><![CDATA[database]]></Name>
+				<X>0</X><Y>0</Y>
+				<Label><X>10</X><Y>0</Y></Label>
+				<PublicFlag>false</PublicFlag>
+				<PresentationFlag>true</PresentationFlag>
+				<ShowLabel>true</ShowLabel>
+				<DatabaseType>EXCEL_ACCESS</DatabaseType>
+				<ConnectionURL><![CDATA[]]></ConnectionURL>
+				<ConnectOnStartup>true</ConnectOnStartup>
+				<DatabaseName><![CDATA[]]></DatabaseName>
+				<ResourceReference>
+					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
+					<ClassName><![CDATA[data_FontysCampus/Buildings_FontysCampus.xlsx]]></ClassName>
 				</ResourceReference>
 				<Host><![CDATA[localhost]]></Host>
 				<JdbcDriverClassName><![CDATA[net.sourceforge.jtds.jdbc.Driver]]></JdbcDriverClassName>
@@ -2715,6 +2701,15 @@ build();]]></Body>
 				</TableReference>
 				<ConnectionIndex>1</ConnectionIndex>
 				<ExternalTableName><![CDATA["profiles_2023"]]></ExternalTableName>
+				<AutoImport>true</AutoImport>
+			</TableImportSettings>
+			<TableImportSettings>
+				<TableReference>
+					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
+					<ClassName><![CDATA[comp_water_consumption]]></ClassName>
+				</TableReference>
+				<ConnectionIndex>0</ConnectionIndex>
+				<ExternalTableName><![CDATA["comp_water_consumption"]]></ExternalTableName>
 				<AutoImport>false</AutoImport>
 			</TableImportSettings>
 			<TableImportSettings>
@@ -2724,6 +2719,15 @@ build();]]></Body>
 				</TableReference>
 				<ConnectionIndex>2</ConnectionIndex>
 				<ExternalTableName><![CDATA["gridnodes"]]></ExternalTableName>
+				<AutoImport>true</AutoImport>
+			</TableImportSettings>
+			<TableImportSettings>
+				<TableReference>
+					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
+					<ClassName><![CDATA[comp_co2_emission]]></ClassName>
+				</TableReference>
+				<ConnectionIndex>0</ConnectionIndex>
+				<ExternalTableName><![CDATA["comp_co2_emission"]]></ExternalTableName>
 				<AutoImport>false</AutoImport>
 			</TableImportSettings>
 			<TableImportSettings>
@@ -2738,20 +2742,20 @@ build();]]></Body>
 			<TableImportSettings>
 				<TableReference>
 					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
-					<ClassName><![CDATA[buildings]]></ClassName>
+					<ClassName><![CDATA[neighbourhoods]]></ClassName>
 				</TableReference>
 				<ConnectionIndex>3</ConnectionIndex>
-				<ExternalTableName><![CDATA["buildings"]]></ExternalTableName>
-				<AutoImport>false</AutoImport>
+				<ExternalTableName><![CDATA["neighbourhoods"]]></ExternalTableName>
+				<AutoImport>true</AutoImport>
 			</TableImportSettings>
 			<TableImportSettings>
 				<TableReference>
 					<PackageName><![CDATA[zerofontyscampus]]></PackageName>
-					<ClassName><![CDATA[neighbourhoods]]></ClassName>
+					<ClassName><![CDATA[buildings]]></ClassName>
 				</TableReference>
 				<ConnectionIndex>4</ConnectionIndex>
-				<ExternalTableName><![CDATA["neighbourhoods"]]></ExternalTableName>
-				<AutoImport>false</AutoImport>
+				<ExternalTableName><![CDATA["buildings"]]></ExternalTableName>
+				<AutoImport>true</AutoImport>
 			</TableImportSettings>
 		</ImportSettings>
 		<ExportSettings>
@@ -2859,7 +2863,7 @@ build();]]></Body>
 					<ParameterName><![CDATA[p_runHeadlessAtStartup]]></ParameterName>
 				</Parameter>
 				<Parameter>
-					<ParameterName><![CDATA[map_zoomlevel]]></ParameterName>
+					<ParameterName><![CDATA[map_scale]]></ParameterName>
 				</Parameter>
 				<Parameter>
 					<ParameterName><![CDATA[p_showKPISummary]]></ParameterName>
